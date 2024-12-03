@@ -10,7 +10,7 @@ export class DocusignController {
   @Redirect()
   async login() {
     console.log('entrei em login');
-    const url = this.docusignService.getAuthorizationUrl();
+    const url = this.docusignService.getConsentUri();
     console.log(url);
     return { url };
   }

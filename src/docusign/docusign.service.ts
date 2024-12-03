@@ -24,8 +24,10 @@ export class DocusignService {
     });
   }
 
-  // Gera a URL de autorização
-  getAuthorizationUrl(): string {
+  // Controi a uri de consentimento, para o usuario autorizar o uso da aplicacao
+  // A uri de consetimento redireciona para a rota designada como redirecturi que nesse caso eh nossa rota callback
+  // A rota callback pega o code gerado na resposta do redirecionamento da api do docusign e com ele conseguimos gerar o access token
+  getConsentUri(): string {
     const authorizationUri = this.oauth2.authorizeURL({
       redirect_uri: this.config.docusign.redirectUrl,
       scope: 'signature',
