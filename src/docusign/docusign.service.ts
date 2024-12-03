@@ -1,52 +1,49 @@
-import { Inject, Injectable } from '@nestjs/common';
-import docusign from 'docusign-esign';
-import assert from 'node:assert';
-import { error } from 'node:console';
-import { ConfigService } from 'src/config/config.service';
+import { Injectable, Inject } from '@nestjs/common';
+import { AuthorizationCode } from 'simple-oauth2';
+import { Service } from 'src/config/config.service';
+import { DocusignConfigDto } from 'src/config/dto/docusign-config.dto';
 
 @Injectable()
 export class DocusignService {
-  constructor(
-    @Inject(ConfigService) private readonly configService: ConfigService,
-  ) {}
-  async create() {
-    const config = await this.configService.getDocusignConfig();
-    const apiClient = new docusign.ApiClient();
-    apiClient
-      .generateAccessToken(
-        config.docusign.integrationKey,
-        config.docusign.secretKey,
-        100,
-      )
-      .then((oAuthToken) => {
-        assert.equal(error, undefined);
-        assert.notEqual(oAuthToken, undefined);
-        assert.notEqual(oAuthToken.accessToken, undefined);
-        assert.ok(oAuthToken.expiresIn > 0);
+  private oauth2: AuthorizationCode;
+  private config: DocusignConfigDto;
 
-        console.log(oAuthToken);
+  constructor(@Inject(Service) private configService: Service) {
+    this.config = this.configService.getDocusignConfig();
 
-        apiClient
-          .getUserInfo(oAuthToken.accessToken)
-          .then(function (userInfo) {
-            assert.equal(error, undefined);
-            assert.notEqual(userInfo, undefined);
-            assert.notEqual(userInfo.accounts, undefined);
-            assert.ok(userInfo.accounts.length > 0);
+    this.oauth2 = new AuthorizationCode({
+      client: {
+        id: this.config.docusign.integrationKey,
+        secret: this.config.docusign.clientSecret,
+      },
+      auth: {
+        tokenHost: this.config.docusign.oAuthBaseUrl,
+        tokenPath: '/oauth/token',
+        authorizePath: '/oauth/auth',
+      },
+    });
+  }
 
-            console.log('UserInfo: ' + userInfo);
-            // parse first account's basePath
-            // below code required for production, no effect in demo (same
-            // domain)
-            apiClient.setBasePath(userInfo.accounts[0].baseUri + '/restapi');
-            return oAuthToken;
-          })
-          .catch(function (err) {
-            throw err;
-          });
-      })
-      .catch(function (err) {
-        throw err;
-      });
+  // Gera a URL de autorização
+  getAuthorizationUrl(): string {
+    const authorizationUri = this.oauth2.authorizeURL({
+      redirect_uri: this.config.docusign.redirectUrl,
+      scope: 'signature',
+    });
+    return authorizationUri;
+  }
+
+  // Troca o código de autorização pelo token de acesso
+  async getAccessToken(code: string) {
+    const tokenParams = {
+      code,
+      redirect_uri: this.config.docusign.redirectUrl,
+    };
+    try {
+      const accessToken = await this.oauth2.getToken(tokenParams);
+      return accessToken.token.access_token;
+    } catch (error) {
+      throw new Error('Erro ao obter token de acesso');
+    }
   }
 }

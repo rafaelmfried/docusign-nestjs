@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from './config.service';
-import { ConfigService as NestConfigService } from '@nestjs/config';
-import { ConfigModule as NestConfigModule } from '@nestjs/config';
+import { Service } from './config.service';
+import {
+  ConfigService as NestConfigService,
+  ConfigModule as NestConfigModule,
+} from '@nestjs/config';
 
 @Module({
   imports: [
@@ -11,7 +13,7 @@ import { ConfigModule as NestConfigModule } from '@nestjs/config';
         process.env.NODE_ENV === 'production' ? '.env.prod' : '.env.dev',
     }),
   ],
-  providers: [NestConfigService],
-  exports: [ConfigService],
+  providers: [NestConfigService, Service],
+  exports: [Service],
 })
-export class ConfigModule {}
+export class CModule {}
