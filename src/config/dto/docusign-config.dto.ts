@@ -7,5 +7,6 @@ export class DocusignConfigDto {
     clientSecret?: string;
     oAuthBaseUrl?: string;
     redirectUrl?: string;
+    accessToken?: string;
   };
 }
