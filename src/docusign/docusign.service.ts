@@ -2,7 +2,9 @@ import { Injectable, Inject } from '@nestjs/common';
 import { AuthorizationCode } from 'simple-oauth2';
 import { Service } from 'src/config/config.service';
 import { DocusignConfigDto } from 'src/config/dto/docusign-config.dto';
-import { ApiClient, docusign } from 'docusign-esign';
+import { ApiClient, TemplatesApi, EnvelopesApi } from 'docusign-esign';
+import docusign from 'docusign-esign';
+import { RequestUserInfoResponse } from './dto/request-user-info.dto';
 
 @Injectable()
 export class DocusignService {
@@ -61,125 +63,103 @@ export class DocusignService {
     }
   }
 
-  async populateTemplate(
-    templateId: string,
-    data: any,
-  ): Promise<docusign.EnvelopeSummary> {
+  async userInfo() {
+    try {
+      const { accounts }: RequestUserInfoResponse =
+        await this.apiClient.getUserInfo(this.config.docusign.accessToken);
+
+      console.log(accounts);
+    } catch (error) {
+      throw new Error('Erro ao obter informações do usuário');
+    }
+  }
+
+  async envelopeDefinition(templateId: string, data: any) {
     // Cria os tabs dinamicamente com base no JSON recebido
     // const formatedData = this.formatDataForDocusign(data);
-    const textTabs = Object.keys(data).map((key) => {
-      return docusign.Text.constructFromObject({
-        tabLabel: key,
-        value: data[key],
-      });
-    });
-
-    const tabs = docusign.Tabs.constructFromObject({
-      textTabs: textTabs,
-    });
-
-    const envelopeDefinition = docusign.EnvelopeDefinition.constructFromObject({
+    const envelopeDefinition = {
+      emailSubject: 'Teste de envio de envelope',
       templateId: templateId,
-      status: 'created',
       templateRoles: [
-        docusign.TemplateRole.constructFromObject({
-          email: data.fornecedor.email, // Email do fornecedor
-          name: data.fornecedor.nome,
-          roleName: 'Fornecedor',
-          tabs: tabs,
-        }),
-        docusign.TemplateRole.constructFromObject({
-          email: data.testemunhas.representante.email, // Email da testemunha representante
-          name: data.testemunhas.representante.nome,
-          roleName: 'Testemunha Representante',
-          tabs: tabs,
-        }),
-        docusign.TemplateRole.constructFromObject({
-          email: data.testemunhas.supervisor.email, // Email do supervisor da testemunha
-          name: data.testemunhas.supervisor.nome,
-          roleName: 'Supervisor Testemunha',
-          tabs: tabs,
-        }),
-        docusign.TemplateRole.constructFromObject({
-          email: data.favorecido.email, // Email do favorecido
-          name: data.favorecido.nome,
-          roleName: 'Favorecido',
-          tabs: tabs,
-        }),
+        {
+          roleName: 'signer',
+          name: data.fullName,
+          email: data.emailDevedor,
+          tabs: {
+            textTabs: [
+              {
+                tabLabel: 'fullName',
+                value: data.nomeDevedor,
+              },
+            ],
+          },
+        },
       ],
-    });
-
-    const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
-    return await envelopesApi.createEnvelope(this.config.docusign.accountId, {
-      envelopeDefinition,
-    });
+      status: 'created',
+    };
+    console.log(envelopeDefinition);
+    return envelopeDefinition;
   }
 
-  async createEnvelope(envelopeId: string): Promise<docusign.EnvelopeSummary> {
-    const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
-    const envelope = await envelopesApi.getEnvelope(
-      this.config.docusign.accountId,
-      envelopeId,
-    );
-    envelope.status = 'sent';
-    return await envelopesApi.update(
-      this.config.docusign.accountId,
-      envelopeId,
-      { envelope },
-    );
+  async createEnvelope(envelopeDefinition): Promise<docusign.EnvelopeSummary> {
+    const envelopesApi = new EnvelopesApi(this.apiClient);
+    const envelope = await envelopesApi.createEnvelope(envelopeDefinition);
+    console.log(envelope);
+    return envelope;
   }
 
-  async sendEnvelope(envelopeId: string): Promise<docusign.EnvelopeSummary> {
-    const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
-    const envelope = await envelopesApi.getEnvelope(
-      this.config.docusign.accountId,
-      envelopeId,
-    );
-    envelope.status = 'sent';
-    return await envelopesApi.update(
-      this.config.docusign.accountId,
-      envelopeId,
-      { envelope },
-    );
-  }
+  // async sendEnvelope(envelopeId: string): Promise<docusign.EnvelopeSummary> {
+  //   const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
+  //   const envelope = await envelopesApi.getEnvelope(
+  //     this.config.docusign.accountId,
+  //     envelopeId,
+  //   );
+  //   envelope.status = 'sent';
+  //   return await envelopesApi.update(
+  //     this.config.docusign.accountId,
+  //     envelopeId,
+  //     { envelope },
+  //   );
+  // }
 
-  async listDocumentsStatus(): Promise<docusign.EnvelopesInformation> {
-    const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
-    const status = ['sent', 'delivered', 'completed'];
-    const options = { status: status.join(',') };
-    return await envelopesApi.listStatusChanges(
-      this.config.docusign.accountId,
-      options,
-    );
-  }
+  // async listDocumentsStatus(): Promise<docusign.EnvelopesInformation> {
+  //   const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
+  //   const status = ['sent', 'delivered', 'completed'];
+  //   const options = { status: status.join(',') };
+  //   return await envelopesApi.listStatusChanges(
+  //     this.config.docusign.accountId,
+  //     options,
+  //   );
+  // }
 
-  formatDataForDocusign(data: any): any {
-    const formattedData: any = {};
+  // formatDataForDocusign(data: any): any {
+  //   const formattedData: any = {};
 
-    function flattenObject(obj: any, parentKey: string = '') {
-      Object.keys(obj).forEach((key) => {
-        const newKey = parentKey
-          ? `${parentKey}${key.charAt(0).toUpperCase() + key.slice(1)}`
-          : key;
-        if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
-          flattenObject(obj[key], newKey);
-        } else {
-          formattedData[newKey] = obj[key];
-        }
-      });
-    }
+  //   function flattenObject(obj: any, parentKey: string = '') {
+  //     Object.keys(obj).forEach((key) => {
+  //       const newKey = parentKey
+  //         ? `${parentKey}${key.charAt(0).toUpperCase() + key.slice(1)}`
+  //         : key;
+  //       if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+  //         flattenObject(obj[key], newKey);
+  //       } else {
+  //         formattedData[newKey] = obj[key];
+  //       }
+  //     });
+  //   }
 
-    flattenObject(data);
-    return formattedData;
-  }
+  //   flattenObject(data);
+  //   return formattedData;
+  // }
 
   async listTemplates() {
-    const templatesApi = docusign.TemplatesApi(this.apiClient);
+    const templatesApi = new TemplatesApi(this.apiClient);
     console.log('templates: ', templatesApi);
     const templates = await templatesApi.listTemplates(
       this.config.docusign.accountId,
     );
-    templates.envelopeTemplates.forEach((template) => {
+    console.log('templates: ', templates);
+    templates.envelopeTemplates?.forEach((template) => {
       console.log(
         `Template Name: ${template.name}, Template ID: ${template.templateId}`,
       );
