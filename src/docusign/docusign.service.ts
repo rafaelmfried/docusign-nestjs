@@ -6,7 +6,6 @@ import {
   ApiClient,
   TemplatesApi,
   EnvelopesApi,
-  EnvelopesInformation,
   Templates,
 } from 'docusign-esign';
 import { RequestUserInfoResponse } from './dto/request-user-info.dto';
@@ -97,11 +96,11 @@ export class DocusignService {
         email: role.email,
         tabs: role.tabs,
       })),
-      status: 'created',
+      status: 'sent', //created
     };
 
     console.log(
-      'Envelope Definition:',
+      'Envelope Definition Service:',
       JSON.stringify(envelopeDefinition, null, 2),
     );
     return envelopeDefinition;
@@ -165,7 +164,10 @@ export class DocusignService {
         envelopeId,
         envelopeStatus,
       );
-      console.log('Envelope enviado com sucesso:', sentEnvelope);
+      console.log(
+        'Envelope enviado com sucesso:',
+        sentEnvelope.bulkEnvelopeStatus,
+      );
       return sentEnvelope;
     } catch (error) {
       console.error(
@@ -177,17 +179,20 @@ export class DocusignService {
   }
 
   // 7. Exibe o status dos envelopes usando o Connect do DocuSign ----------> Working and Thinking how this shits work better?
-  async showEnvelopeStatus(envelopeIds: string): Promise<EnvelopesInformation> {
-    const envelopesApi = new EnvelopesApi(this.apiClient);
-    const status = await envelopesApi.listStatusChanges(
-      this.config.docusign.accountId,
-      {
-        envelopeIds,
-        fromDate: '2024-01-01',
-        toDate: new Date().toISOString(),
-      },
-    );
-    return status;
+  async showEnvelopeStatus(): Promise<any> {
+    const { accountId } = this.config.docusign;
+    try {
+      const envelopesApi = new EnvelopesApi(this.apiClient);
+      const status = await envelopesApi.listStatusChanges(accountId, {
+        fromDate: '09/12/2024',
+      });
+
+      console.log(status);
+      return status;
+    } catch (error) {
+      if (error?.response) console.log(error.response.data);
+      throw new Error(error);
+    }
   }
 
   // 8. Lista todos os templates disponíveis na conta DocuSign

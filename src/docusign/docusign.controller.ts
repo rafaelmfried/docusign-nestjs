@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Query, Redirect } from '@nestjs/common';
 import { DocusignService } from './docusign.service';
-import { ShowEnvelopeStatusDto } from './dto/envelope-status.dto';
+// import { ShowEnvelopeStatusDto } from './dto/envelope-status.dto';
 import { SendEnvelopeDto } from './dto/send-envelope.dto';
 import { CreateEnvelopeDto } from './dto/create-envelope.dto';
 
@@ -71,12 +71,8 @@ export class DocusignController {
 
   // 6. Endpoint para verificar o status de um envelope
   @Post('envelope/status')
-  async showEnvelopeStatus(
-    @Body() showEnvelopeStatusDto: ShowEnvelopeStatusDto,
-  ) {
-    const status = await this.docusignService.showEnvelopeStatus(
-      showEnvelopeStatusDto.envelopeIds,
-    );
+  async showEnvelopeStatus() {
+    const status = await this.docusignService.showEnvelopeStatus();
     return { status };
   }
 
