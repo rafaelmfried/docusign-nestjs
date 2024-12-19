@@ -1,4 +1,9 @@
-import { Injectable, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  ForbiddenException,
+  HttpException,
+} from '@nestjs/common';
 import { AuthorizationCode } from 'simple-oauth2';
 import { Service } from 'src/config/config.service';
 import { DocusignConfigDto } from 'src/config/dto/docusign-config.dto';
@@ -96,7 +101,7 @@ export class DocusignService {
         email: role.email,
         tabs: role.tabs,
       })),
-      status: 'sent', //created
+      status: 'created', //created
     };
 
     console.log(
@@ -124,11 +129,6 @@ export class DocusignService {
 
       return envelope.envelopeId;
     } catch (error) {
-      console.error(
-        'Erro ao criar envelope:',
-        error.response?.data || error.message,
-      );
-
       // Verrificar erro resposta da API
       if (error.response) {
         const errorDetails = error.response.data || error.response;
@@ -145,41 +145,48 @@ export class DocusignService {
 
   // 6. Envia o envelope criado pelo seu ID
   async sendEnvelope(envelopeId: string): Promise<any> {
+    console.log('envelopeID: ', envelopeId);
     const envelopesApi = new EnvelopesApi(this.apiClient);
     const { accountId } = this.config.docusign;
 
     try {
-      const envelopeSummary = await envelopesApi.getEnvelope(
-        accountId,
-        envelopeId,
-      );
-      console.log('Envelope encontrado:', envelopeSummary);
+      if (!envelopeId)
+        throw new Error('Erro ao enviar envelope, envelope id é obrigatorio.');
 
-      const envelopeStatus = {
-        status: 'sent',
-      };
+      const envelope = await envelopesApi.getEnvelope(accountId, envelopeId);
 
-      const sentEnvelope = await envelopesApi.update(
-        accountId,
-        envelopeId,
-        envelopeStatus,
-      );
-      console.log(
-        'Envelope enviado com sucesso:',
-        sentEnvelope.bulkEnvelopeStatus,
-      );
-      return sentEnvelope;
+      if (!envelope || !envelope.status)
+        throw new Error('Paramentro de envelope ID invalido');
+      if (envelope.status === 'sent')
+        throw new Error('Envelope já foi enviado');
+      if (envelope.status === 'completed')
+        throw new Error('Envelope já foi completado');
+      if (envelope.status === 'declined')
+        throw new Error('Envelope foi recusado');
+      if (envelope.status === 'voided')
+        throw new Error('Envelope foi cancelado');
+
+      console.log('envelope status: ', envelope.status);
+
+      const result = await envelopesApi.update(accountId, envelopeId, {
+        envelope: { status: 'sent' },
+      });
+
+      if (!result.envelopeId) throw new Error('Falha ao enviar envelope');
+
+      console.log(result);
+      return result;
     } catch (error) {
-      console.error(
-        'Erro ao enviar o envelope:',
-        error.response?.data || error.message,
+      console.log('error: ', error);
+      throw new HttpException(
+        `Erro ao enviar envelope: ${error.response?.data.message || error.message}`,
+        error.status,
       );
-      throw new Error('Erro ao enviar envelope');
     }
   }
 
-  // 7. Exibe o status dos envelopes usando o Connect do DocuSign ----------> Working and Thinking how this shits work better?
-  async showEnvelopeStatus(): Promise<any> {
+  // 7. Exibe o status dos envelopes
+  async getEnvelopeStatus(): Promise<any> {
     const { accountId } = this.config.docusign;
     try {
       const envelopesApi = new EnvelopesApi(this.apiClient);
@@ -187,11 +194,11 @@ export class DocusignService {
         fromDate: '09/12/2024',
       });
 
-      console.log(status);
       return status;
     } catch (error) {
-      if (error?.response) console.log(error.response.data);
-      throw new Error(error);
+      if (!error?.response)
+        throw new ForbiddenException(error.response.data.message);
+      else throw new ForbiddenException('Erro ao buscar status dos envelopes');
     }
   }
 
@@ -207,5 +214,25 @@ export class DocusignService {
       );
     });
     return templates.envelopeTemplates;
+  }
+
+  // 9. Mostra o conteudo de um envelope.
+  async getEnvelope(envelopeId: string) {
+    try {
+      const { accountId } = this.config.docusign;
+      const envelopeApi = new EnvelopesApi(this.apiClient);
+      if (!envelopeApi) throw new Error('Erro na instancia do envelopes API');
+      if (!envelopeId) throw new Error('Envelope ID obrigatorio');
+
+      const envelope = await envelopeApi.getEnvelope(accountId, envelopeId);
+      if (!envelope) throw new Error('ID do envelope invalido.');
+
+      return envelope;
+    } catch (error) {
+      throw new HttpException(
+        `Erro ao pegar envelope: ${error.response.data?.message}`,
+        error.status,
+      );
+    }
   }
 }
